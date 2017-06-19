@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	cp "github.com/Masterminds/glide/cache"
 	"github.com/Masterminds/glide/cfg"
@@ -19,6 +20,19 @@ import (
 	"github.com/Masterminds/semver"
 	v "github.com/Masterminds/vcs"
 )
+
+var skipFetch bool
+var forceFetch map[string]bool
+
+func init() {
+	forceFetch = make(map[string]bool)
+	for _, item := range strings.Split(os.Getenv("GLIDE_FETCH_ONLY"), ",") {
+		if item != "" {
+			skipFetch = true
+			forceFetch[item] = true
+		}
+	}
+}
 
 // VcsUpdate updates to a particular checkout based on the VCS setting.
 func VcsUpdate(dep *cfg.Dependency, force bool, updated *UpdateTracker) error {
@@ -48,6 +62,9 @@ func VcsUpdate(dep *cfg.Dependency, force bool, updated *UpdateTracker) error {
 	location := cp.Location()
 	dest := filepath.Join(location, "src", key)
 
+	wg := &sync.WaitGroup{}
+	mutex := sync.Mutex{}
+
 	// If destination doesn't exist we need to perform an initial checkout.
 	if _, err := os.Stat(dest); os.IsNotExist(err) {
 		msg.Info("--> Fetching %s", dep.Name)
@@ -56,93 +73,114 @@ func VcsUpdate(dep *cfg.Dependency, force bool, updated *UpdateTracker) error {
 			return err
 		}
 	} else {
-		// At this point we have a directory for the package.
-		msg.Info("--> Fetching updates for %s", dep.Name)
-
-		// When the directory is not empty and has no VCS directory it's
-		// a vendored files situation.
-		empty, err := gpath.IsDirectoryEmpty(dest)
-		if err != nil {
-			return err
-		}
-		_, err = v.DetectVcsFromFS(dest)
-		if empty == true && err == v.ErrCannotDetectVCS {
-			msg.Warn("Cached version of %s is an empty directory. Fetching a new copy of the dependency", dep.Name)
-			msg.Debug("Removing empty directory %s", dest)
-			err := os.RemoveAll(dest)
-			if err != nil {
-				return err
-			}
-			if err = VcsGet(dep); err != nil {
-				msg.Warn("Unable to checkout %s\n", dep.Name)
-				return err
-			}
-		} else {
-			repo, err := dep.GetRepo(dest)
-
-			// Tried to checkout a repo to a path that does not work. Either the
-			// type or endpoint has changed. Force is being passed in so the old
-			// location can be removed and replaced with the new one.
-			// Warning, any changes in the old location will be deleted.
-			// TODO: Put dirty checking in on the existing local checkout.
-			if (err == v.ErrWrongVCS || err == v.ErrWrongRemote) && force == true {
-				newRemote := dep.Remote()
-
-				msg.Warn("Replacing %s with contents from %s\n", dep.Name, newRemote)
-				rerr := os.RemoveAll(dest)
-				if rerr != nil {
-					return rerr
-				}
-				if err = VcsGet(dep); err != nil {
-					msg.Warn("Unable to checkout %s\n", dep.Name)
-					return err
-				}
-
-				repo, err = dep.GetRepo(dest)
-				if err != nil {
-					return err
-				}
-			} else if err != nil {
-				return err
-			} else if repo.IsDirty() {
-				return fmt.Errorf("%s contains uncommitted changes. Skipping update", dep.Name)
-			}
-
-			ver := dep.Reference
-			if ver == "" {
-				ver = defaultBranch(repo)
-			}
-			// Check if the current version is a tag or commit id. If it is
-			// and that version is already checked out we can skip updating
-			// which is faster than going out to the Internet to perform
-			// an update.
-			if ver != "" {
-				version, err := repo.Version()
-				if err != nil {
-					return err
-				}
-				ib, err := isBranch(ver, repo)
-				if err != nil {
-					return err
-				}
-
-				// If the current version equals the ref and it's not a
-				// branch it's a tag or commit id so we can skip
-				// performing an update.
-				if version == ver && !ib {
-					msg.Debug("%s is already set to version %s. Skipping update", dep.Name, dep.Reference)
+		go func() {
+			wg.Add(1)
+			updateErr := func() error {
+				if _, ok := forceFetch[dep.Name]; !ok && skipFetch {
+					msg.Info("--> Skipping fetch " + dep.Name)
 					return nil
 				}
+
+				// At this point we have a directory for the package.
+				msg.Info("--> Fetching updates for %s", dep.Name)
+
+				// When the directory is not empty and has no VCS directory it's
+				// a vendored files situation.
+				empty, err := gpath.IsDirectoryEmpty(dest)
+				if err != nil {
+					return err
+				}
+				_, err = v.DetectVcsFromFS(dest)
+				if empty == true && err == v.ErrCannotDetectVCS {
+					msg.Warn("Cached version of %s is an empty directory. Fetching a new copy of the dependency", dep.Name)
+					msg.Debug("Removing empty directory %s", dest)
+					err := os.RemoveAll(dest)
+					if err != nil {
+						return err
+					}
+					if err = VcsGet(dep); err != nil {
+						msg.Warn("Unable to checkout %s\n", dep.Name)
+						return err
+					}
+				} else {
+					repo, err := dep.GetRepo(dest)
+
+					// Tried to checkout a repo to a path that does not work. Either the
+					// type or endpoint has changed. Force is being passed in so the old
+					// location can be removed and replaced with the new one.
+					// Warning, any changes in the old location will be deleted.
+					// TODO: Put dirty checking in on the existing local checkout.
+					if (err == v.ErrWrongVCS || err == v.ErrWrongRemote) && force == true {
+						newRemote := dep.Remote()
+
+						msg.Warn("Replacing %s with contents from %s\n", dep.Name, newRemote)
+						rerr := os.RemoveAll(dest)
+						if rerr != nil {
+							return rerr
+						}
+						if err = VcsGet(dep); err != nil {
+							msg.Warn("Unable to checkout %s\n", dep.Name)
+							return err
+						}
+
+						repo, err = dep.GetRepo(dest)
+						if err != nil {
+							return err
+						}
+					} else if err != nil {
+						return err
+					} else if repo.IsDirty() {
+						return fmt.Errorf("%s contains uncommitted changes. Skipping update", dep.Name)
+					}
+
+					ver := dep.Reference
+					if ver == "" {
+						ver = defaultBranch(repo)
+					}
+					// Check if the current version is a tag or commit id. If it is
+					// and that version is already checked out we can skip updating
+					// which is faster than going out to the Internet to perform
+					// an update.
+					if ver != "" {
+						version, err := repo.Version()
+						if err != nil {
+							return err
+						}
+						ib, err := isBranch(ver, repo)
+						if err != nil {
+							return err
+						}
+
+						// If the current version equals the ref and it's not a
+						// branch it's a tag or commit id so we can skip
+						// performing an update.
+						if version == ver && !ib {
+							msg.Debug("%s is already set to version %s. Skipping update", dep.Name, dep.Reference)
+							return nil
+						}
+					}
+
+					if err := repo.Update(); err != nil {
+						msg.Warn("Download failed.\n")
+						return err
+					}
+				}
+				return nil
+			}()
+
+			if updateErr != nil {
+				mutex.Lock()
+				err = updateErr
+				mutex.Unlock()
 			}
 
-			if err := repo.Update(); err != nil {
-				msg.Warn("Download failed.\n")
-				return err
-			}
-		}
+			wg.Done()
+		}()
 	}
 
-	return nil
+	wg.Wait()
+
+	return err
 }
 
 // VcsVersion set the VCS version for a checkout.

@@ -16,6 +16,25 @@ distributed with the package.
 [![Build status](https://ci.appveyor.com/api/projects/status/3pl4ytgdlfj852li?svg=true&passingText=windows%20build%20passing&failingText=windows%20build%20failing)](https://ci.appveyor.com/project/mattfarina/glide-a8xtg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Masterminds/glide)](https://goreportcard.com/report/github.com/Masterminds/glide) [![GoDoc](https://godoc.org/github.com/Masterminds/glide?status.svg)](https://godoc.org/github.com/Masterminds/glide) [![Documentation Status](https://readthedocs.org/projects/glide/badge/?version=stable)](http://glide.readthedocs.org/en/stable/?badge=stable) [![Documentation Status](https://readthedocs.org/projects/glide/badge/?version=latest)](http://glide.readthedocs.org/en/latest/?badge=latest) [![Join the chat at https://gitter.im/Masterminds/glide](https://badges.gitter.im/Masterminds/glide.svg)](https://gitter.im/Masterminds/glide?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
+### This fork
+
+This fork is intended to speedup `glide update` during intensive deps debugging/upgrading.
+If you have 30-50+ deps in your `glide.lock`, `glide update` may take up to several minutes.
+When you work on your app `glide.yaml` you may need multiple iterations to find appropriate constraints,
+and usually most of your deps do not have any changes during this process.
+Speed improvement is achieved by fine control on which packages to update.
+
+```
+GLIDE_FETCH_ONLY=github.com/my/dep1,github.com/my/dep2 glide update --force
+```
+In this case `glide` will only fetch updates for `github.com/my/dep1` and `github.com/my/dep2` packages.
+Fetch for all other packages will be skipped.
+
+```
+GLIDE_FETCH_ONLY=none glide update --force
+```
+In this case no deps will be checked to have updates, deps graph will be resolved right out of disk cache.
+
 ### Golang Dep
 
 An [official package manager](https://github.com/golang/dep) has been started for

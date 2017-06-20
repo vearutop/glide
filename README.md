@@ -35,6 +35,34 @@ GLIDE_FETCH_ONLY=none glide update --force
 ```
 In this case no deps will be checked to have updates, deps graph will be resolved right out of disk cache.
 
+Exporting log is changed to provide a better vision on locked deps.
+It includes pinned ref name and commit info:
+
+```
+[INFO]	--> Exporting github.com/philhofer/fwd master@98c11a7 2016-01-29 <philhofer@users.noreply.github.com>
+[INFO]	--> Exporting github.com/opentracing/opentracing-go v1.0.2@1949ddb (^1.0.1) 2017-04-26 <ted@lightstep.com>
+[INFO]	--> Exporting github.com/matttproud/golang_protobuf_extensions master@fc2b8d3 2015-04-06 <matt.proud@gmail.com>
+```
+
+_Using the fork_
+
+Install
+
+```
+go get -u github.com/Masterminds/glide
+cd $GOPATH/src/github.com/Masterminds/glide
+git remote add vearutop https://github.com/vearutop/glide
+git fetch vearutop
+git checkout vearutop/master
+make build
+```
+
+Then you can try alternative glide in your project as
+
+```
+$GOPATH/src/github.com/Masterminds/glide/glide
+```
+
 ### Golang Dep
 
 An [official package manager](https://github.com/golang/dep) has been started for

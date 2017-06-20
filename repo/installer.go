@@ -284,7 +284,25 @@ func (i *Installer) Export(conf *cfg.Config) error {
 					if err != nil {
 						msg.Die(err.Error())
 					}
-					msg.Info("--> Exporting %s", dep.Name)
+
+					refString := dep.Reference
+					if refString == dep.Pin {
+						refString = refString[0:7]
+					}
+					if refString != "" && refString != dep.Original {
+						refString = " (" + refString + ")"
+					} else {
+						refString = ""
+					}
+
+					commitInfo := " "
+					if dep.CommitInfo != nil {
+						commitInfo = " " +
+							dep.CommitInfo.Date.UTC().Format("2006-01-02") + " " +
+							dep.CommitInfo.Author
+					}
+
+					msg.Info("--> Exporting %s %s@%s%s%s", dep.Name, dep.Original, dep.Pin[0:7], refString, commitInfo)
 					if err := repo.ExportDir(filepath.Join(vp, filepath.ToSlash(dep.Name))); err != nil {
 						msg.Err("Export failed for %s: %s\n", dep.Name, err)
 						// Capture the error while making sure the concurrent

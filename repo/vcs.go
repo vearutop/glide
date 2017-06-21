@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -23,6 +24,8 @@ import (
 
 var skipFetch bool
 var forceFetch map[string]bool
+var workersCount int
+var jobs chan bool
 
 func init() {
 	forceFetch = make(map[string]bool)
@@ -32,6 +35,21 @@ func init() {
 			forceFetch[item] = true
 		}
 	}
+
+	l := os.Getenv("GLIDE_WORKERS")
+	if l != "" {
+		var err error
+		workersCount, err = strconv.Atoi(l)
+		if err != nil {
+			panic(err.Error())
+		}
+	}
+
+	if workersCount == 0 {
+		workersCount = 20
+	}
+
+	jobs = make(chan bool, workersCount)
 }
 
 // VcsUpdate updates to a particular checkout based on the VCS setting.
@@ -73,7 +91,7 @@ func VcsUpdate(dep *cfg.Dependency, force bool, updated *UpdateTracker) error {
 			return err
 		}
 	} else {
-		go func() {
+		f := func() {
 			wg.Add(1)
 			updateErr := func() error {
 				if _, ok := forceFetch[dep.Name]; !ok && skipFetch {
@@ -174,8 +192,19 @@ func VcsUpdate(dep *cfg.Dependency, force bool, updated *UpdateTracker) error {
 				mutex.Unlock()
 			}
 
+			if workersCount != 1 {
+				<-jobs
+			}
+
 			wg.Done()
-		}()
+		}
+
+		if workersCount == 1 {
+			f()
+		} else {
+			jobs <- true
+			go f()
+		}
 	}
 
 	wg.Wait()

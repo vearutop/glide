@@ -35,6 +35,14 @@ GLIDE_FETCH_ONLY=none glide update --force
 ```
 In this case no deps will be checked to have updates, deps graph will be resolved right out of disk cache.
 
+
+You can control how many parallel workers should perform updating with `GLIDE_WORKERS` env variable. Default value is 20.
+
+```
+GLIDE_WORKERS=5 glide update --force
+```
+
+
 Exporting log is changed to provide a better vision on locked deps.
 It includes pinned ref name and commit info:
 

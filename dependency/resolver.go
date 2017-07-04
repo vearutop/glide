@@ -169,6 +169,9 @@ type Resolver struct {
 	// findCache caches hits from Find. This reduces the number of filesystem
 	// touches that have to be done for dependency resolution.
 	findCache map[string]*PkgInfo
+
+	// foundImport keeps a map of found required import to list of parent packages
+	foundImports map[string][]string
 }
 
 // NewResolver returns a new Resolver initialized with the DefaultMissingPackageHandler.
@@ -208,6 +211,7 @@ func NewResolver(basedir string) (*Resolver, error) {
 		alreadyQ:       map[string]bool{},
 		hadError:       map[string]bool{},
 		findCache:      map[string]*PkgInfo{},
+		foundImports:   make(map[string][]string, 50),
 
 		// The config instance here should really be replaced with a real one.
 		Config: &cfg.Config{},
@@ -320,6 +324,8 @@ func (r *Resolver) ResolveLocal(deep bool) ([]string, []string, error) {
 			info := r.FindPkg(imp)
 			switch info.Loc {
 			case LocUnknown, LocVendor:
+				msg.Debug("Adding local Import: %s from %s", filepath.FromSlash(imp), path)
+				r.importReferenced(filepath.FromSlash(imp), path)
 				l.PushBack(filepath.Join(r.VendorDir, filepath.FromSlash(imp))) // Do we need a path on this?
 			case LocGopath:
 				if !dirHasPrefix(info.Path, r.basedir) {
@@ -327,6 +333,8 @@ func (r *Resolver) ResolveLocal(deep bool) ([]string, []string, error) {
 					// scanning. It should really be on vendor. But we don't
 					// want it to reference GOPATH. We want it to be detected
 					// and moved.
+					msg.Debug("Adding local Import: %s from %s", filepath.FromSlash(imp), path)
+					r.importReferenced(filepath.FromSlash(imp), path)
 					l.PushBack(filepath.Join(r.VendorDir, filepath.FromSlash(imp)))
 				}
 			case LocRelative:
@@ -434,9 +442,6 @@ func (r *Resolver) Stripv(str string) string {
 func (r *Resolver) vpath(str string) string {
 	return filepath.Join(r.basedir, "vendor", str)
 }
-
-// foundImport keeps a map of found required import to list of parent packages
-var foundImports map[string][]string
 
 // resolveImports takes a list of existing packages and resolves their imports.
 //
@@ -546,7 +551,7 @@ func (r *Resolver) resolveImports(queue *list.List, testDeps, addTest bool) ([]s
 			} else if strings.Contains(errStr, "no such file or directory") {
 				r.hadError[dep] = true
 				msg.Err("Error scanning %s: %s", dep, err)
-				if deps, ok := foundImports[dep]; ok {
+				if deps, ok := r.foundImports[dep]; ok {
 					msg.Err("Referenced by: %s", strings.Join(deps, ", "))
 				}
 
@@ -583,14 +588,7 @@ func (r *Resolver) resolveImports(queue *list.List, testDeps, addTest bool) ([]s
 			pi := r.FindPkg(imp)
 			if pi.Loc != LocCgo && pi.Loc != LocGoroot && pi.Loc != LocAppengine {
 				msg.Debug("Package %s imports %s", dep, imp)
-				if foundImports == nil {
-					foundImports = make(map[string][]string, 100)
-				}
-				if deps, ok := foundImports[imp]; ok {
-					foundImports[imp] = append(deps, dep)
-				} else {
-					foundImports[imp] = []string{dep}
-				}
+				r.importReferenced(imp, dep)
 			}
 			switch pi.Loc {
 			case LocVendor:
@@ -683,6 +681,14 @@ func (r *Resolver) resolveImports(queue *list.List, testDeps, addTest bool) ([]s
 	}
 
 	return res, nil
+}
+
+func (r *Resolver) importReferenced(imp, dep string) {
+	if deps, ok := r.foundImports[imp]; ok {
+		r.foundImports[imp] = append(deps, dep)
+	} else {
+		r.foundImports[imp] = []string{dep}
+	}
 }
 
 // resolveList takes a list and resolves it.

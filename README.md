@@ -57,6 +57,11 @@ In case of missing dependency package you will have a list of packages that refe
 [ERROR]	Error scanning somewhere.com/discovery/discovery: open /Users/johndoe/.glide/cache/src/https-somewhere.com-discovery/discovery: no such file or directory
 [ERROR]	Referenced by: somewhere.com/grpc
 ```
+Or by local package:
+```
+[ERROR]	Error scanning somewhere.com/discovery/discovery: open /Users/johndoe/.glide/cache/src/https-somewhere.com-discovery/discovery: no such file or directory
+[ERROR]	Referenced by: /Users/johndoe/golang/src/somewhere.com/brick/app
+```
 
 _Using the fork_
 

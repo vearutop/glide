@@ -435,6 +435,9 @@ func (r *Resolver) vpath(str string) string {
 	return filepath.Join(r.basedir, "vendor", str)
 }
 
+// foundImport keeps a map of found required import to list of parent packages
+var foundImports map[string][]string
+
 // resolveImports takes a list of existing packages and resolves their imports.
 //
 // It returns a list of all of the packages that it can determine are required
@@ -543,13 +546,19 @@ func (r *Resolver) resolveImports(queue *list.List, testDeps, addTest bool) ([]s
 			} else if strings.Contains(errStr, "no such file or directory") {
 				r.hadError[dep] = true
 				msg.Err("Error scanning %s: %s", dep, err)
-				msg.Err("This error means the referenced package was not found.")
-				msg.Err("Missing file or directory errors usually occur when multiple packages")
-				msg.Err("share a common dependency and the first reference encountered by the scanner")
-				msg.Err("sets the version to one that does not contain a subpackage needed required")
-				msg.Err("by another package that uses the shared dependency. Try setting a")
-				msg.Err("version in your glide.yaml that works for all packages that share this")
-				msg.Err("dependency.")
+				if deps, ok := foundImports[dep]; ok {
+					msg.Err("Referenced by: %s", strings.Join(deps, ", "))
+				}
+
+				/*
+					msg.Err("This error means the referenced package was not found.")
+					msg.Err("Missing file or directory errors usually occur when multiple packages")
+					msg.Err("share a common dependency and the first reference encountered by the scanner")
+					msg.Err("sets the version to one that does not contain a subpackage needed required")
+					msg.Err("by another package that uses the shared dependency. Try setting a")
+					msg.Err("version in your glide.yaml that works for all packages that share this")
+					msg.Err("dependency.")
+				*/
 			} else {
 				r.hadError[dep] = true
 				msg.Err("Error scanning %s: %s", dep, err)
@@ -574,6 +583,14 @@ func (r *Resolver) resolveImports(queue *list.List, testDeps, addTest bool) ([]s
 			pi := r.FindPkg(imp)
 			if pi.Loc != LocCgo && pi.Loc != LocGoroot && pi.Loc != LocAppengine {
 				msg.Debug("Package %s imports %s", dep, imp)
+				if foundImports == nil {
+					foundImports = make(map[string][]string, 100)
+				}
+				if deps, ok := foundImports[imp]; ok {
+					foundImports[imp] = append(deps, dep)
+				} else {
+					foundImports[imp] = []string{dep}
+				}
 			}
 			switch pi.Loc {
 			case LocVendor:

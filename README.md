@@ -52,6 +52,12 @@ It includes pinned ref name and commit info:
 [INFO]	--> Exporting github.com/matttproud/golang_protobuf_extensions master@fc2b8d3 2015-04-06 <matt.proud@gmail.com>
 ```
 
+In case of missing dependency package you will have a list of packages that referenced it:
+```
+[ERROR]	Error scanning somewhere.com/discovery/discovery: open /Users/johndoe/.glide/cache/src/https-somewhere.com-discovery/discovery: no such file or directory
+[ERROR]	Referenced by: somewhere.com/grpc
+```
+
 _Using the fork_
 
 Install

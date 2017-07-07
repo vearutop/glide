@@ -24,6 +24,8 @@ When you work on your app `glide.yaml` you may need multiple iterations to find 
 and usually most of your deps do not have any changes during this process.
 Speed improvement is achieved by fine control on which packages to update.
 
+#### VCS Fetch control
+
 ```
 GLIDE_FETCH_ONLY=github.com/my/dep1,github.com/my/dep2 glide update --force
 ```
@@ -35,6 +37,7 @@ GLIDE_FETCH_ONLY=none glide update --force
 ```
 In this case no deps will be checked to have updates, deps graph will be resolved right out of disk cache.
 
+#### Parallelization control
 
 You can control how many parallel workers should perform updating with `GLIDE_WORKERS` env variable. Default value is 20.
 
@@ -42,6 +45,7 @@ You can control how many parallel workers should perform updating with `GLIDE_WO
 GLIDE_WORKERS=5 glide update --force
 ```
 
+#### Sane verbosity
 
 Exporting log is changed to provide a better vision on locked deps.
 It includes pinned ref name and commit info:
@@ -63,7 +67,7 @@ Or by local package:
 [ERROR]	Referenced by: /Users/johndoe/golang/src/somewhere.com/brick/app
 ```
 
-_Using the fork_
+#### Using the fork
 
 Install
 
@@ -73,14 +77,29 @@ cd $GOPATH/src/github.com/Masterminds/glide
 git remote add vearutop https://github.com/vearutop/glide
 git fetch vearutop
 git checkout vearutop/master
-make build
+go install
 ```
 
-Then you can try alternative glide in your project as
+#### Performance test
+
+Performance test was done by running `glide update --force` on `github.com/containous/traefik` after initial cache warmup.
 
 ```
-$GOPATH/src/github.com/Masterminds/glide/glide
+[INFO]	Project relies on 133 dependencies.
 ```
+
+With mediocre office networking on MacBook Pro (16G 2.2GHz I7 4-core 8-thr).
+`GLIDE_FETCH_ONLY` was not used.
+
+|ver@`GLIDE_WORKERS`|`glide update --force` avg time, seconds|min time, seconds|max time, seconds|runs|
+|-------------------|----------------------------------------|-----------------|-----------------|----|
+|0.12.3             |367.42                                  |323.61           |466.15           |19  |
+|dev@10             |108.97                                  |85.28            |124.36           |7   |
+|dev@15             |103.14                                  |94.91            |119.34           |4   |
+|dev@20             |100.07                                  |89.7             |115.33           |4   |
+|dev@30             |120.43                                  |80.95            |162.63           |3   |
+|dev@5              |132.18                                  |110.35           |149.95           |3   |
+
 
 ### Golang Dep
 

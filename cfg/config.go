@@ -381,6 +381,19 @@ type Dependency struct {
 	Os          []string        `yaml:"os,omitempty"`
 }
 
+func (dep *Dependency) RefString() string {
+	refString := dep.Reference
+	if refString == dep.Pin {
+		refString = refString[0:7]
+	}
+	if refString != "" && refString != dep.Original {
+		refString = " (" + refString + ")"
+	} else {
+		refString = ""
+	}
+	return refString
+}
+
 // A transitive representation of a dependency for importing and exploting to yaml.
 type dep struct {
 	Name        string   `yaml:"package"`

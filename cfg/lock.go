@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"bytes"
 	"gopkg.in/yaml.v2"
 )
 
@@ -76,6 +77,12 @@ func (lf *Lockfile) WriteFile(lockpath string) error {
 	o, err := lf.Marshal()
 	if err != nil {
 		return err
+	}
+	for _, l := range lf.Imports {
+		o = bytes.Replace(o, []byte("version: "+l.Version), []byte("version: "+l.Version+" # "+l.Original), 1)
+	}
+	for _, l := range lf.DevImports {
+		o = bytes.Replace(o, []byte("version: "+l.Version), []byte("version: "+l.Version+" # "+l.Original), 1)
 	}
 	return ioutil.WriteFile(lockpath, o, 0666)
 }
@@ -162,6 +169,7 @@ type Lock struct {
 	Subpackages []string `yaml:"subpackages,omitempty"`
 	Arch        []string `yaml:"arch,omitempty"`
 	Os          []string `yaml:"os,omitempty"`
+	Original    string   `yaml:"-"`
 }
 
 // Clone creates a clone of a Lock.
@@ -174,6 +182,7 @@ func (l *Lock) Clone() *Lock {
 		Subpackages: l.Subpackages,
 		Arch:        l.Arch,
 		Os:          l.Os,
+		Original:    l.Original,
 	}
 }
 
@@ -187,6 +196,7 @@ func LockFromDependency(dep *Dependency) *Lock {
 		Subpackages: dep.Subpackages,
 		Arch:        dep.Arch,
 		Os:          dep.Os,
+		Original:    dep.Original,
 	}
 }
 
